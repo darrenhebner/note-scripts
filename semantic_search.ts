@@ -1,8 +1,6 @@
 import { $ } from "bun";
 import { parseArgs } from "util";
-import { prepareDatabase, ai, db } from "./utilities";
-
-await prepareDatabase();
+import { ai, db } from "./utilities";
 
 const { values } = parseArgs({
   args: Bun.argv,
@@ -30,7 +28,7 @@ if (values.embedding) {
   queryEmbedding = (
     await ai.embeddings.create({
       input: values.query,
-      model: "text-embedding-ada-002",
+      model: "text-embedding-3-large",
     })
   ).data[0].embedding;
 }

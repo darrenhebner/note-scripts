@@ -5,9 +5,6 @@ import OpenAI from "openai";
 
 const dbPath = Bun.env.DB_LOCATION;
 const notesPath = Bun.env.NOTES_LOCATION;
-
-console.log("notes path", dbPath);
-
 const OPEN_AI_KEY = Bun.env.OPEN_AI_KEY;
 
 if (!OPEN_AI_KEY) {
@@ -18,6 +15,7 @@ export const db = new Database(dbPath, { create: true });
 
 export const ai = new OpenAI({
   apiKey: OPEN_AI_KEY,
+  baseURL: Bun.env.OPEN_AI_BASE_URL,
 });
 
 export async function prepareDatabase() {
@@ -95,11 +93,15 @@ export async function prepareDatabase() {
     const existingTopics = db.query(`SELECT * FROM topics`).all();
 
     // Extract themes from content, passing in existing themes
-    const result = await ai.completions.create({
-      model: "gpt-3.5-turbo-instruct",
+    const result = await ai.chat.completions.create({
+      model: "gpt-4o-mini",
       max_tokens: 1000,
       temperature: 0.2,
-      prompt: `
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `
 Task:
 
 You are given the contents of a daily note. Your task is to identify the main themes discussed in the note and output them as a list formatted in valid JSON. The JSON should contain simple and concise themes that capture the essence of the content without any explanation or supporting text. You will also be provided with a list of existing topics from other notes. You should try to reuse existing topics if they are similar to the topics identified in the current note. You may only introduce new topics if no existing topics are similar.
@@ -115,18 +117,24 @@ Example input:
 I went to the gym today. Later that evening, I went to a concert.
 
 Example output:
-["Exercise", "Live Music"]
+{"topics": ["Exercise", "Live Music"]}
 
 Existing topics:
-${existingTopics.map((topic) => topic.topic).join(", ")}
-
-Note contents:
+${existingTopics.map((topic) => topic.topic).join(", ")} 
+        `,
+        },
+        {
+          role: "user",
+          content: `
+Here is the content of my daily note:
 ${content}
-      `,
+          `,
+        },
+      ],
     });
 
     try {
-      const topics = JSON.parse(result.choices[0].text);
+      const { topics } = JSON.parse(result.choices[0].message.content);
 
       for (const topic of topics) {
         if (existingTopics.includes(topic)) {
@@ -148,38 +156,47 @@ ${content}
         );
       }
     } catch (err) {
-      console.error(`Could not parse`, result.choices[0].text);
+      console.error(`Could not parse`, result.choices[0].message.content);
     }
 
     // delete existing embeddings for file
     db.run(`DELETE from embeddings WHERE file = ?`, file.name);
 
     // chunk text via open ai
-    const chunkResult = await ai.completions.create({
-      model: "gpt-3.5-turbo-instruct",
+    const chunkResult = await ai.chat.completions.create({
+      model: "gpt-4o-mini",
       temperature: 0.2,
       max_tokens: 1000,
-      prompt: `
-Task:
-You are given the contents of a daily note. Your task is to split the content in to chunks. When you encounter consecutive sentences that are talking about the same topic, group them in to the same chunk. The content will be provided in markdown format. 
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `
+       You are given the contents of a daily note. Your task is to split the content in to chunks. When you encounter consecutive sentences that are talking about the same topic, group them in to the same chunk. The content will be provided in markdown format. 
 
 You may only respond using valid JSON. The JSON must contain only the list of chunks in plain text, without any additional information. The chunks may only contain text that is a part of the daily note.
 
 Example output:
-["I read a book this morning about architecture. It is really good.", "Dogs are my favourite animal."]
-
+{"chunks": ["I read a book this morning about architecture. It is really good.", "Dogs are my favourite animal."]}
+`,
+        },
+        {
+          role: "user",
+          content: `
 Here is the content of the daily note:
 ${content}
-      `,
+        `,
+        },
+      ],
     });
 
     try {
-      const chunks = JSON.parse(chunkResult.choices[0].text);
+      const { chunks } = JSON.parse(chunkResult.choices[0].message.content);
 
       for (const chunk of chunks) {
         const embedding = await ai.embeddings.create({
           input: chunk,
-          model: "text-embedding-ada-002",
+          model: "text-embedding-3-large",
         });
 
         db.run(
@@ -195,7 +212,7 @@ ${content}
     } catch (err) {
       console.error(
         "Unable to parse suggested chunks",
-        chunkResult.choices[0].text
+        chunkResult.choices[0].message.content
       );
       console.error(err);
     }
