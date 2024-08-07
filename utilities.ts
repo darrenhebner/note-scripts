@@ -1,19 +1,20 @@
 import { Database } from "bun:sqlite";
-import os from "os";
 import path from "path";
 import { readdir } from "node:fs/promises";
 import OpenAI from "openai";
 
-const dbPath = path.join(os.homedir(), "notes.sqlite");
-const notesPath = path.join(os.homedir(), "Documents", "daily");
+const dbPath = Bun.env.DB_LOCATION;
+const notesPath = Bun.env.NOTES_LOCATION;
 
-export const db = new Database(dbPath, { create: true });
+console.log("notes path", dbPath);
 
 const OPEN_AI_KEY = Bun.env.OPEN_AI_KEY;
 
 if (!OPEN_AI_KEY) {
   throw new Error("An open AI API key must be provided");
 }
+
+export const db = new Database(dbPath, { create: true });
 
 export const ai = new OpenAI({
   apiKey: OPEN_AI_KEY,
