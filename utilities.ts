@@ -95,7 +95,7 @@ export async function prepareDatabase() {
     // Extract themes from content, passing in existing themes
     const result = await ai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 1000,
+      max_tokens: 2500,
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
@@ -166,7 +166,7 @@ ${content}
     const chunkResult = await ai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
-      max_tokens: 1000,
+      max_tokens: 2500,
       response_format: { type: "json_object" },
       messages: [
         {
