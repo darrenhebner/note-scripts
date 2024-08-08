@@ -53,7 +53,31 @@ if (selection) {
   const embeddings = await getRelevantEmbeddings(embedding);
 
   if (query.endsWith("?")) {
-    console.log("asking");
+    const stream = await ai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a research assistant that uses a set of relevant notes to answer the users questions. Here are some relevant notes from the users daily logs.
+
+${embeddings.slice(0, 5).map(
+  (embedding) => `
+  Title: ${embedding.file}
+
+  Content: ${embedding.content}
+  `
+)}
+`,
+        },
+        { role: "user", content: query },
+      ],
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      process.stdout.write(chunk.choices[0]?.delta?.content || "");
+    }
   } else {
     await $`echo ${(
       await Promise.all(

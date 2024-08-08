@@ -66,7 +66,6 @@ export async function prepareDatabase() {
 
     // Note for future self, for some reason I'm never finding a matching note. So I always end up creating a new embedding
     if (fileExistsWithSameLastModified.count > 0) {
-      console.log("skipping existing file", file.name);
       continue;
     }
 
