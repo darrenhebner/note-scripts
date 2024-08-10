@@ -74,7 +74,7 @@ export async function prepareDatabase() {
     const content = await file.text();
     const embedding = await ai.embeddings.create({
       input: content,
-      model: "text-embedding-ada-002",
+      model: "text-embedding-3-small",
     });
 
     db.run(
@@ -142,7 +142,7 @@ ${content}
 
         const embedding = await ai.embeddings.create({
           input: topic,
-          model: "text-embedding-ada-002",
+          model: "text-embedding-3-small",
         });
 
         db.run(
@@ -195,7 +195,7 @@ ${content}
       for (const chunk of chunks) {
         const embedding = await ai.embeddings.create({
           input: chunk,
-          model: "text-embedding-3-large",
+          model: "text-embedding-3-small",
         });
 
         db.run(
