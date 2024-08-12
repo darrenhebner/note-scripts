@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { ai, db, prepareDatabase } from "./utilities";
-import { getRelevantEmbeddings, type Embedding } from "./semantic_search";
+import { getRelevantEmbeddings } from "./semantic_search";
 
 await prepareDatabase();
 
@@ -32,9 +32,9 @@ if (selection) {
     await Promise.all(
       embeddings.map(
         async (embedding) =>
-          `${embedding.content.replace(/[\r\n]+/g, " ")}\t${
-            embedding.file
-          }\t${await getRange(embedding)}`
+          `${embedding.content.replace(/[\r\n]+/g, " ")}\t${embedding.file}\t${
+            embedding.start
+          }:${embedding.end}`
       )
     )
   )
@@ -85,7 +85,7 @@ ${embeddings.slice(0, 5).map(
           async (embedding) =>
             `${embedding.content.replace(/[\r\n]+/g, " ")}\t${
               embedding.file
-            }\t${await getRange(embedding)}`
+            }\t${embedding.start}:${embedding.end}`
         )
       )
     )
@@ -94,30 +94,4 @@ ${embeddings.slice(0, 5).map(
         "\n"
       )} | fzf --delimiter='\t' --with-nth=1 --preview "bat {2} --language md --style plain --color always --highlight-line {3}" --preview-window wrap`;
   }
-}
-
-async function getRange(embedding: Embedding) {
-  // load file
-  const file = await Bun.file(embedding.file).text();
-
-  // split file by new line
-  const lines = file.split("\n");
-  // iterate over lines
-
-  const matchedLines: number[] = [];
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (trimmed.length > 0 && embedding.content.includes(line)) {
-      matchedLines.push(index + 1);
-    }
-  });
-
-  if (matchedLines.length === 0) {
-    return "1";
-  }
-
-  const start = Math.min(...matchedLines);
-  const end = Math.max(...matchedLines);
-
-  return `${start}:${end}`;
 }

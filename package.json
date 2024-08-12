@@ -9,6 +9,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@langchain/textsplitters": "^0.0.3",
     "openai": "^4.54.0"
   }
 }

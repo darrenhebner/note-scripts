@@ -4,6 +4,8 @@ export class Embedding {
   file: string;
   embedding: string;
   content: string;
+  start: number;
+  end: number;
 
   similarity(reference: number[]) {
     const embedding = JSON.parse(this.embedding) as number[];
@@ -23,7 +25,7 @@ export class Embedding {
 
 export async function getRelevantEmbeddings(embedding: number[]) {
   const allEmbeddings = db
-    .query("SELECT file, embedding, content FROM embeddings")
+    .query("SELECT file, embedding, content, start, end FROM embeddings")
     .as(Embedding)
     .all();
 

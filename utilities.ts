@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import path from "path";
 import { readdir } from "node:fs/promises";
 import OpenAI from "openai";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
 const dbPath = Bun.env.DB_LOCATION;
 const notesPath = Bun.env.NOTES_LOCATION;
@@ -43,6 +44,8 @@ export async function prepareDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       content TEXT NOT NULL,
       file TEXT NOT NULL,
+      start INTEGER NOT NULL,
+      end INTEGER NOT NULL,
       embedding BLOB NOT NULL
     )
   `);
@@ -52,6 +55,11 @@ export async function prepareDatabase() {
   const files = fileNames.map((fileName) =>
     Bun.file(path.join(notesPath, fileName))
   );
+
+  const splitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+    chunkSize: 1000,
+    chunkOverlap: 200,
+  });
 
   for (const file of files) {
     if (!file.name?.endsWith(".md")) {
@@ -74,7 +82,7 @@ export async function prepareDatabase() {
     const content = await file.text();
     const embedding = await ai.embeddings.create({
       input: content,
-      model: "text-embedding-3-small",
+      model: "text-embedding-3-large",
     });
 
     db.run(
@@ -142,7 +150,7 @@ ${content}
 
         const embedding = await ai.embeddings.create({
           input: topic,
-          model: "text-embedding-3-small",
+          model: "text-embedding-3-large",
         });
 
         db.run(
@@ -161,60 +169,27 @@ ${content}
     // delete existing embeddings for file
     db.run(`DELETE from embeddings WHERE file = ?`, file.name);
 
-    // chunk text via open ai
-    const chunkResult = await ai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      max_tokens: 2500,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `
-       You are given the contents of a daily note. Your task is to split the content in to chunks. When you encounter consecutive sentences that are talking about the same topic, group them in to the same chunk. The content will be provided in markdown format. 
+    const chunks = await splitter.createDocuments([content]);
 
-You may only respond using valid JSON. The JSON must contain only the list of chunks in plain text, without any additional information. The chunks may only contain text that is a part of the daily note.
+    for (const chunk of chunks) {
+      const embedding = await ai.embeddings.create({
+        input: chunk.pageContent,
+        model: "text-embedding-3-large",
+      });
 
-Example output:
-{"chunks": ["I read a book this morning about architecture. It is really good.", "Dogs are my favourite animal."]}
-`,
-        },
-        {
-          role: "user",
-          content: `
-Here is the content of the daily note:
-${content}
+      const { from, to } = chunk.metadata.loc.lines;
+
+      db.run(
+        `
+          INSERT INTO embeddings (content, file, embedding, start, end)
+          VALUES (?, ?, ?, ?, ?)
         `,
-        },
-      ],
-    });
-
-    try {
-      const { chunks } = JSON.parse(chunkResult.choices[0].message.content);
-
-      for (const chunk of chunks) {
-        const embedding = await ai.embeddings.create({
-          input: chunk,
-          model: "text-embedding-3-small",
-        });
-
-        db.run(
-          `
-          INSERT INTO embeddings (content, file, embedding)
-          VALUES (?, ?, ?)
-        `,
-          chunk,
-          file.name,
-          JSON.stringify(embedding.data[0].embedding)
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Unable to parse suggested chunks",
-        chunkResult.choices[0].message.content
+        chunk.pageContent,
+        file.name,
+        JSON.stringify(embedding.data[0].embedding),
+        from,
+        to
       );
-      console.error(err);
     }
-    // add embeddings to database
   }
 }
